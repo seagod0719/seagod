@@ -2,41 +2,43 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>D2R Terror Master</title>
+    <title>D2R Terror Master Final</title>
     <style>
         body { background-color: #1a1a1a; color: #d4c3a3; font-family: 'Malgun Gothic', sans-serif; display: flex; justify-content: center; padding: 20px; }
-        .container { width: 600px; border: 2px solid #5e4b32; padding: 20px; background: #262626; border-radius: 10px; box-shadow: 0 0 20px #000; }
-        h2 { text-align: center; color: #ff4500; }
-        .status-box { background: #111; padding: 15px; border-radius: 8px; text-align: center; margin-bottom: 15px; border: 1px solid #444; }
-        #current-zone { font-size: 1.5em; color: #fff; display: block; margin-bottom: 5px; }
-        .zone-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-bottom: 15px; max-height: 350px; overflow-y: auto; background: #1a1a1a; padding: 10px; }
-        .zone-item { font-size: 0.8em; display: flex; align-items: center; padding: 3px; cursor: pointer; }
+        .container { width: 600px; border: 2px solid #5e4b32; padding: 25px; background: #262626; border-radius: 10px; box-shadow: 0 0 20px #000; }
+        h2 { text-align: center; color: #ff4500; text-shadow: 2px 2px 4px #000; }
+        .status-box { background: #111; padding: 20px; border-radius: 8px; text-align: center; margin-bottom: 20px; border: 1px solid #444; }
+        #current-zone { font-size: 1.6em; color: #fff; display: block; margin-bottom: 5px; font-weight: bold; }
+        .manual-input { width: 100%; display: flex; gap: 5px; margin-bottom: 20px; }
+        input[type="text"] { flex: 1; padding: 12px; background: #111; border: 1px solid #5e4b32; color: #fff; border-radius: 4px; }
+        .zone-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 20px; max-height: 400px; overflow-y: auto; background: #1a1a1a; padding: 10px; border: 1px solid #333; }
+        .zone-item { font-size: 0.85em; display: flex; align-items: center; padding: 5px; cursor: pointer; border-radius: 4px; }
         .zone-item:hover { background: #333; }
-        .manual-input { width: 100%; display: flex; gap: 5px; margin-bottom: 15px; }
-        input[type="text"] { flex: 1; padding: 8px; background: #111; border: 1px solid #5e4b32; color: #fff; font-size: 0.8em; }
-        button { padding: 10px; background: #8b0000; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        button { padding: 12px; background: #8b0000; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
         button:hover { background: #b30000; }
     </style>
 </head>
 <body>
 <div class="container">
-    <h2>🔥 TERROR MASTER</h2>
+    <h2>🔥 TERROR MASTER FINAL</h2>
     <div class="status-box">
         <span id="current-zone">연결 시도 중...</span>
-        <span id="timer" style="color: #ffbc00;">--:--</span>
+        <div id="timer" style="color: #ffbc00; font-family: monospace; margin-top:5px;">--:--</div>
     </div>
 
     <div class="manual-input">
-        <input type="text" id="raw-input" placeholder="여기에 테러존 사이트 텍스트 복사-붙여넣기">
+        <input type="text" id="raw-input" placeholder="여기에 지역명 입력 (예: 카생, 성채, 혼돈)">
         <button onclick="manualCheck()">수동 확인</button>
     </div>
 
     <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
-        <strong style="color:#ffbc00">알림 지역 선택</strong>
-        <button style="padding:2px 8px; font-size:11px;" onclick="toggleAll(true)">전체 선택</button>
+        <strong style="color:#ffbc00">📍 알림 지역 선택 (체크한 곳만 알림)</strong>
+        <button style="padding:4px 10px; font-size:11px; background:#444;" onclick="toggleAll(true)">전체 선택</button>
     </div>
+    
     <div class="zone-grid" id="zone-grid"></div>
-    <button style="width:100%" onclick="startApp()">알림 권한 허용 및 시작</button>
+    
+    <button style="width:100%; margin-top:10px;" onclick="startApp()">1. 알림 권한 허용 및 시작</button>
 </div>
 
 <script>
@@ -48,35 +50,62 @@ const ZONES = {
     "Bloody Foothills": "핏빛 언덕", "Frigid Highlands": "혹한의 고산지", "Nihlathak's Temple": "니들라탁의 사원", "Ancient's Way": "고대인의 길", "Worldstone Keep": "세계석 성채 (바알)"
 };
 
+// 지역 그리드 생성
 const grid = document.getElementById('zone-grid');
 Object.entries(ZONES).forEach(([en, ko]) => {
     grid.innerHTML += `<label class="zone-item"><input type="checkbox" class="zone-check" value="${en}"> ${ko}</label>`;
 });
 
 function toggleAll(s) { document.querySelectorAll('.zone-check').forEach(c => c.checked = s); }
-function startApp() { Notification.requestPermission(); updateTZ(); }
 
-// async function updateTZ() {
+async function startApp() {
+    const perm = await Notification.requestPermission();
+    if (perm === "granted") {
+        alert("알림이 활성화되었습니다!");
+        updateTZ();
+    }
+}
+
+async function updateTZ() {
     try {
-        const res = await fetch(`https://d2runewizard.com/api/terror-zone?_=${Date.now()}`);
-        const data = await res.json();
-        if (data?.zone?.name) display(data.zone.name);
-    } catch (e) { document.getElementById('current-zone').innerText = "자동 연결 막힘 (수동 입력 필요)"; }
+        // 다중 프록시 시도
+        const target = encodeURIComponent('https://d2runewizard.com/api/terror-zone');
+        const res = await fetch(`https://api.allorigins.win/get?url=${target}&_=${Date.now()}`);
+        const json = await res.json();
+        const data = JSON.parse(json.contents);
+        
+        if (data?.zone?.name) {
+            display(data.zone.name);
+        }
+    } catch (e) {
+        document.getElementById('current-zone').innerText = "자동 연결 실패 (수동 입력 필요)";
+    }
 }
 
 function manualCheck() {
-    const txt = document.getElementById('raw-input').value;
+    const txt = document.getElementById('raw-input').value.trim();
+    if (!txt) return;
+
     for (const [en, ko] of Object.entries(ZONES)) {
-        if (txt.includes(en) || txt.includes(ko)) { display(en); return; }
+        // 입력한 글자가 영어명이나 한글명에 포함되어 있으면 인식
+        if (en.toLowerCase().includes(txt.toLowerCase()) || ko.includes(txt)) {
+            display(en);
+            document.getElementById('raw-input').value = ""; // 입력창 초기화
+            return;
+        }
     }
-    alert("인식 가능한 지역명이 없습니다.");
+    alert("지역명을 찾을 수 없습니다. (예: 카생, 바알, 혼돈 등)");
 }
 
 function display(en) {
-    document.getElementById('current-zone').innerText = ZONES[en] || en;
-    if (new Date().getMinutes() === 0) {
-        const checked = Array.from(document.querySelectorAll('.zone-check:checked')).map(c => c.value);
-        if (checked.includes(en)) new Notification("🔥 테러존 발생!", { body: `지역: ${ZONES[en]}` });
+    const koName = ZONES[en] || en;
+    document.getElementById('current-zone').innerText = koName;
+    
+    // 정각 알림 체크
+    const now = new Date();
+    const checked = Array.from(document.querySelectorAll('.zone-check:checked')).map(c => c.value);
+    if (now.getMinutes() === 0 && checked.includes(en)) {
+        new Notification("🔥 테러존 발생!", { body: `지금 바로 접속: ${koName}` });
     }
 }
 
@@ -85,6 +114,7 @@ setInterval(() => {
     document.getElementById('timer').innerText = `${59-n.getMinutes()}분 ${59-n.getSeconds()}초 남음`;
     if (n.getMinutes() === 0 && n.getSeconds() === 0) updateTZ();
 }, 1000);
+
 updateTZ();
 </script>
 </body>
