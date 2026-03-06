@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>D2R Terror Zone - Direct Access</title>
+    <style>
+        body { background-color: #1a1a1a; color: #d4c3a3; font-family: 'Malgun Gothic', sans-serif; display: flex; justify-content: center; padding: 20px; }
+        .container { width: 650px; border: 2px solid #5e4b32; padding: 25px; background: #262626; border-radius: 10px; box-shadow: 0 0 20px rgba(0,0,0,0.7); }
+        h2 { text-align: center; color: #ff4500; text-shadow: 2px 2px 4px #000; }
+        .status-box { background: #111; padding: 20px; border-radius: 8px; text-align: center; margin-bottom: 20px; border: 1px solid #444; }
+        #current-zone { font-size: 1.6em; color: #fff; display: block; margin: 5px 0; font-weight: bold; text-shadow: 0 0 10px #ff4500; }
+        .zone-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 20px; max-height: 400px; overflow-y: auto; padding: 10px; border: 1px solid #444; background: #1a1a1a; }
+        .zone-item { font-size: 0.85em; display: flex; align-items: center; padding: 5px; border-radius: 4px; cursor: pointer; }
+        .zone-item:hover { background: #333; }
+        .footer-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        button { padding: 12px; background: #8b0000; color: white; border: 1px solid #5e4b32; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        .btn-all { background: #444; font-size: 11px; padding: 5px; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>🔥 DIABLO II TERROR TRACKER</h2>
+    
+    <div class="status-box">
+        <span id="current-zone">연결 확인 중...</span>
+        <span id="timer" style="color: #ffbc00;">--:--</span>
+    </div>
+
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+        <strong style="color:#ffbc00">📍 알림 지역 선택</strong>
+        <button class="btn-all" onclick="toggleAll(true)">전체 선택</button>
+    </div>
+    
+    <div class="zone-grid" id="zone-grid"></div>
+
+    <div class="footer-controls">
+        <select id="notify-time" style="padding:10px; background:#333; color:white;">
+            <option value="0">정각 즉시 알림</option>
+            <option value="1">1분 전</option>
+            <option value="5">5분 전</option>
+        </select>
+        <button onclick="startApp()">1. 권한 허용 및 시작</button>
+    </div>
+</div>
+
+<script>
+const ALL_ZONES = {
+    "Blood Moor": "핏빛 황무지", "Cold Plains": "차거운 평야", "Burial Grounds": "매장지", "Stony Field": "바위 들판", "Dark Wood": "어둠의 숲", "Black Marsh": "검은 습지", "Forgotten Tower": "잊힌 탑", "Jail": "감옥", "Catacombs": "지하묘지 (안다)", "Secret Cow Level": "카우방",
+    "Sewers": "하수도", "Rocky Waste": "바위투성이 황무지", "Dry Hills": "메마른 언덕", "Far Oasis": "먼 오아시스", "Lost City": "잊힌 도시", "Ancient Tunnels": "고대 하수도", "Arcane Sanctuary": "비전의 성역", "Tal Rasha's Tombs": "탈 라샤 무덤",
+    "Spider Forest": "거미 숲", "Flayer Jungle": "기아에 허덕이는 정글", "Kurast Bazaar": "쿠라스트 시장", "Travincal": "트라빈컬", "Durance of Hate": "증오의 억류지 (메피)",
+    "Outer Steppes": "외곽 평원", "City of the Damned": "저주받은 자들의 도시", "River of Flame": "불길의 강", "Chaos Sanctuary": "혼돈의 성역 (카생)",
+    "Bloody Foothills": "핏빛 언덕", "Frigid Highlands": "혹한의 고산지", "Nihlathak's Temple": "니들라탁의 사원", "Ancient's Way": "고대인의 길", "Worldstone Keep": "세계석 성채 (바알)"
+};
+
+const grid = document.getElementById('zone-grid');
+Object.entries(ALL_ZONES).forEach(([en, ko]) => {
+    grid.innerHTML += `<label class="zone-item"><input type="checkbox" class="zone-check" value="${en}"> ${ko}</label>`;
+});
+
+function toggleAll(status) { document.querySelectorAll('.zone-check').forEach(cb => cb.checked = status); }
+
+async function startApp() {
+    const perm = await Notification.requestPermission();
+    if (perm === "granted") { alert("알림 준비 완료!"); updateTZ(); }
+}
+
+// 
+async function updateTZ() {
+    // 1순위: d2runewizard 직접 연결 (확장 프로그램 활성화 시)
+    try {
+        const res = await fetch(`https://d2runewizard.com/api/terror-zone?_=${Date.now()}`);
+        const data = await res.json();
+        if (data?.zone?.name) {
+            displayZone(data.zone.name);
+            return;
+        }
+    } catch (e) { console.log("Source 1 failed"); }
+
+    // 2순위: 다른 공개 트래커 백업 (JSON 데이터 제공처)
+    try {
+        const res = await fetch('https://api.terrorsoft.net/current'); // 예시 백업 서버
+        const data = await res.json();
+        if (data?.name) { displayZone(data.name); return; }
+    } catch (e) { console.log("Source 2 failed"); }
+
+    document.getElementById('current-zone').innerText = "데이터 소스 연결 중...";
+}
+
+function displayZone(enName) {
+    const koName = ALL_ZONES[enName] || enName;
+    document.getElementById('current-zone').innerText = koName;
+    checkNotify(enName);
+}
+
+let lastKey = "";
+function checkNotify(enName) {
+    const now = new Date();
+    const min = now.getMinutes();
+    const checked = Array.from(document.querySelectorAll('.zone-check:checked')).map(c => c.value);
+    const currentKey = `${now.getHours()}-${min}-${enName}`;
+
+    if (lastKey === currentKey) return;
+
+    if (min === 0 && checked.includes(enName)) {
+        new Notification("🔥 테러존 발생!", { body: `지역: ${ALL_ZONES[enName] || enName}` });
+        lastKey = currentKey;
+    }
+}
+
+setInterval(() => {
+    const n = new Date();
+    document.getElementById('timer').innerText = `${59-n.getMinutes()}분 ${59-n.getSeconds()}초 남음`;
+    if (n.getSeconds() === 0) updateTZ();
+}, 1000);
+
+updateTZ();
+</script>
+</body>
+</html>
